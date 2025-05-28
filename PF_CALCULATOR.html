@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Calcolatore Power Factor Proiettile</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 650px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      background-color: white;
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, select, button {
+      font-size: 16px;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      box-sizing: border-box;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .form-inline-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .form-inline-row .form-group {
+      flex: 1;
+    }
+    .form-inline-row button {
+      padding: 10px 20px;
+      height: 42px;
+      align-self: flex-start;
+    }
+
+    button {
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .add-btn { background-color: #4CAF50; }
+    .add-btn:hover { background-color: #45a049; }
+    .reset-btn { background-color: #f44336; margin-top: 10px; padding: 12px; width: 100%; }
+    .reset-btn:hover { background-color: #d32f2f; }
+    .save-btn { background-color: #2196F3; margin-top: 10px; padding: 12px; width: 100%; }
+    .save-btn:hover { background-color: #0b7dda; }
+    .note-save-btn { background-color: #673AB7; margin-top: 10px; padding: 12px; width: 100%; }
+    .note-save-btn:hover { background-color: #512DA8; }
+
+    #result {
+      margin-top: 25px;
+      padding: 20px;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+    }
+
+    #average {
+      font-size: 28px;
+      font-weight: bold;
+      text-align: center;
+      margin: 15px 0;
+    }
+
+    .pf-list {
+      font-size: 14px;
+      color: #555;
+      margin-top: 15px;
+      border-top: 1px dashed #ccc;
+      padding-top: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .pf-item {
+      margin-bottom: 5px;
+      padding: 5px;
+      background: #f0f0f0;
+      border-radius: 3px;
+    }
+
+    .category-select {
+      margin: 15px 0;
+      text-align: center;
+    }
+
+    .saved-totals {
+      margin-top: 20px;
+    }
+
+    .saved-entry {
+      background: #e0e0e0;
+      padding: 8px;
+      margin-bottom: 8px;
+      border-radius: 4px;
+    }
+
+    .red { color: #f44336; }
+    .green { color: #4CAF50; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>⚡ Power Factor</h1>
+    <div class="category-select">
+      <select id="pf-type">
+        <option value="minor">Minor PF (≥125)</option>
+        <option value="major">Major PF (≥165)</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="weight">Massa proiettile (grain):</label>
+      <input type="number" id="weight" placeholder="Es. 147">
+    </div>
+
+    <label for="velocity">Velocità (fps):</label>
+    <div class="form-inline-row">
+      <div class="form-group">
+        <input type="number" id="velocity" placeholder="Es. 950">
+      </div>
+      <button class="add-btn" onclick="addTest()">Aggiungi</button>
+    </div>
+
+    <button class="reset-btn" onclick="resetTests()">Azzera Prove</button>
+    <button class="save-btn" onclick="saveToFile()">Scarica Tutti i Totali</button>
+    <input type="file" id="fileInput" style="margin-top: 10px;" accept="application/json" onchange="importFromFile(event)">
+
+    <div id="result">
+      <h3>Risultato Corrente:</h3>
+      <div id="average">PF Medio: <span id="pf-average">-</span></div>
+      <div id="category-info"></div>
+      <button class="note-save-btn" onclick="saveCurrentTotal()">Salva Totale</button>
+      <div class="pf-list" id="tests-list">Nessuna prova inserita</div>
+    </div>
+
+    <div class="saved-totals">
+      <h3>Totali salvati</h3>
+      <div id="savedTotalsList">Nessun totale salvato</div>
+    </div>
+  </div>
+
+  <script>
+    let currentTests = [];
+
+    function addTest() {
+      const weight = parseFloat(document.getElementById('weight').value);
+      const velocity = parseFloat(document.getElementById('velocity').value);
+      if (isNaN(weight) || isNaN(velocity)) {
+        alert("Inserisci valori validi!");
+        return;
+      }
+      const powerFactor = (weight * velocity) / 1000;
+      currentTests.push({ weight, velocity, pf: powerFactor });
+      document.getElementById('velocity').value = '';
+      updateCurrentResults();
+    }
+
+    function resetTests() {
+      if (confirm("Azzerare tutte le prove?")) {
+        currentTests = [];
+        updateCurrentResults();
+      }
+    }
+
+    function updateCurrentResults() {
+      const list = document.getElementById('tests-list');
+      list.innerHTML = '';
+      if (currentTests.length === 0) {
+        list.textContent = 'Nessuna prova inserita';
+        document.getElementById('pf-average').textContent = '-';
+        document.getElementById('category-info').innerHTML = '';
+        return;
+      }
+      currentTests.forEach((t, i) => {
+        const div = document.createElement('div');
+        div.className = 'pf-item';
+        div.textContent = `#${i + 1}: ${t.weight}gr × ${t.velocity}fps = PF ${t.pf.toFixed(2)}`;
+        list.appendChild(div);
+      });
+      const avg = calculateAverage(currentTests);
+      document.getElementById('pf-average').textContent = avg.toFixed(2);
+
+      const type = document.getElementById('pf-type').value;
+      const threshold = type === 'minor' ? 125 : 165;
+      const category = document.getElementById('category-info');
+      category.innerHTML = avg >= threshold
+        ? `<p class="green">✔ Rientra in ${type.toUpperCase()} PF</p>`
+        : `<p class="red">✘ Troppo basso per ${type.toUpperCase()} PF</p>`;
+    }
+
+    function calculateAverage(arr) {
+      return arr.reduce((sum, t) => sum + t.pf, 0) / arr.length;
+    }
+
+    function saveToFile() {
+      const saved = JSON.parse(localStorage.getItem('savedTotals') || '[]');
+      if (saved.length === 0) {
+        alert("Nessun totale salvato da esportare.");
+        return;
+      }
+      const blob = new Blob([JSON.stringify(saved, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pf_totali_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function saveCurrentTotal() {
+      const avg = calculateAverage(currentTests);
+      if (!avg) {
+        alert("Nessun totale da salvare.");
+        return;
+      }
+
+      const note = prompt("Inserisci una nota per questo totale:", "");
+      if (note === null) return;
+
+      const entry = {
+        date: new Date().toLocaleString(),
+        pf: avg.toFixed(2),
+        note: note.trim()
+      };
+      const saved = JSON.parse(localStorage.getItem('savedTotals') || '[]');
+      saved.push(entry);
+      localStorage.setItem('savedTotals', JSON.stringify(saved));
+
+      currentTests = [];
+      updateCurrentResults();
+      renderSavedTotals();
+    }
+
+    function deleteSavedTotal(index) {
+      const saved = JSON.parse(localStorage.getItem('savedTotals') || '[]');
+      const item = saved[index];
+      const confirmDelete = confirm(`Vuoi davvero eliminare il totale con PF: ${item.pf} e nota: "${item.note || '-'}"?`);
+      if (!confirmDelete) return;
+      saved.splice(index, 1);
+      localStorage.setItem('savedTotals', JSON.stringify(saved));
+      renderSavedTotals();
+    }
+
+    function renderSavedTotals() {
+      const saved = JSON.parse(localStorage.getItem('savedTotals') || '[]');
+      const container = document.getElementById('savedTotalsList');
+      container.innerHTML = '';
+      if (saved.length === 0) {
+        container.textContent = 'Nessun totale salvato';
+        return;
+      }
+      saved.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = 'saved-entry';
+        div.innerHTML = `<strong>PF:</strong> ${item.pf} <br><strong>Nota:</strong> ${item.note || '-'}<br><small>${item.date}</small><br>
+        <button onclick="deleteSavedTotal(${index})">Elimina</button>`;
+        container.appendChild(div);
+      });
+    }
+
+    function importFromFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (Array.isArray(data)) {
+            localStorage.setItem('savedTotals', JSON.stringify(data));
+            renderSavedTotals();
+          } else {
+            alert("Formato file non valido");
+          }
+        } catch (err) {
+          alert("Errore nella lettura del file");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    renderSavedTotals();
+  </script>
+</body>
+</html>
